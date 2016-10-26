@@ -10,8 +10,11 @@ from flask.ext.login import current_user
 from flask.ext.admin import BaseView
 from flask.ext.restplus import abort
 from flask_admin import expose
+from geoip import geolite2
 
 from app import db
+from app.helpers.flask_helpers import get_real_ip
+from app.helpers.invoicing import InvoicingManager
 from app.helpers.storage import upload, upload_local, UPLOAD_PATHS
 from app.helpers.helpers import uploaded_file
 from app.helpers.permission_decorators import is_organizer, is_super_admin, can_access
@@ -138,6 +141,12 @@ class EventsView(BaseView):
         if CallForPaper.query.filter_by(hash=hash).all():
             hash = get_random_hash()
 
+        match = geolite2.lookup(get_real_ip(True) or '127.0.0.1')
+        if match is not None:
+            current_timezone = match.timezone
+        else:
+            current_timezone = 'UTC'
+
         return self.render(
             '/gentelella/admin/event/new/new.html',
             current_date=datetime.datetime.now(),
@@ -148,6 +157,7 @@ class EventsView(BaseView):
             event_sub_topics=DataGetter.get_event_subtopics(),
             timezones=DataGetter.get_all_timezones(),
             cfs_hash=hash,
+            current_timezone=current_timezone,
             payment_countries=DataGetter.get_payment_countries(),
             payment_currencies=DataGetter.get_payment_currencies(),
             included_settings=self.get_module_settings())
@@ -321,13 +331,18 @@ class EventsView(BaseView):
                 preselect.append(speaker_field)
                 if speaker_form[speaker_field]['require'] == 1:
                     required.append(speaker_field)
-        print preselect
 
         if request.method == 'GET':
 
             hash = get_random_hash()
             if CallForPaper.query.filter_by(hash=hash).all():
                 hash = get_random_hash()
+
+            match = geolite2.lookup(get_real_ip(True) or '127.0.0.1')
+            if match is not None:
+                current_timezone = match.timezone
+            else:
+                current_timezone = 'UTC'
 
             return self.render('/gentelella/admin/event/edit/edit.html',
                                event=event,
@@ -342,6 +357,7 @@ class EventsView(BaseView):
                                event_topics=DataGetter.get_event_topics(),
                                event_sub_topics=DataGetter.get_event_subtopics(),
                                preselect=preselect,
+                               current_timezone=current_timezone,
                                timezones=DataGetter.get_all_timezones(),
                                cfs_hash=hash,
                                step=step,
@@ -561,6 +577,20 @@ class EventsView(BaseView):
             return redirect(url_for('.details_view', event_id=event.id))
         else:
             abort(404)
+
+    @expose('/discount/apply', methods=('POST',))
+    def apply_discount_code(self):
+        discount_code = request.form['discount_code']
+        discount_code = InvoicingManager.get_discount_code(discount_code)
+        if discount_code:
+            if discount_code.is_active:
+                if InvoicingManager.get_discount_code_used_count(discount_code.id) >= discount_code.tickets_number:
+                    return jsonify({'status': 'error', 'message': 'Expired discount code'})
+                return jsonify({'status': 'ok', 'discount_code': discount_code.serialize})
+            else:
+                return jsonify({'status': 'error', 'message': 'Expired discount code'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Invalid discount code'})
 
     def get_module_settings(self):
         included_setting = []

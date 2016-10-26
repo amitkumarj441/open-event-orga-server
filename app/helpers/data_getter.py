@@ -56,6 +56,15 @@ from app.helpers.cache import cache
 
 
 class DataGetter(object):
+
+    @staticmethod
+    def get_super_admin_user():
+        return User.query\
+            .filter_by(is_super_admin=True)\
+            .filter_by(is_admin=True)\
+            .filter_by(is_verified=True)\
+            .order_by(asc(User.id)).first()
+
     @staticmethod
     def get_all_user_notifications(user):
         return Notification.query.filter_by(user=user).all()
@@ -90,6 +99,12 @@ class DataGetter(object):
     def get_all_events():
         """Method return all events"""
         return Event.query.order_by(desc(Event.id)).filter_by(in_trash=False).all()
+
+    @staticmethod
+    def get_all_events_with_discounts():
+        """Method return all events"""
+        return Event.query.order_by(desc(Event.id)).filter_by(in_trash=False)\
+            .filter(Event.discount_code_id != None).filter(Event.discount_code_id > 0).all()
 
     @staticmethod
     def get_custom_placeholders():
@@ -388,7 +403,7 @@ class DataGetter(object):
         return db_model.query.get(object_id)
 
     @staticmethod
-    def get_event(event_id_or_identifier):
+    def get_event(event_id_or_identifier, should_abort=True):
         """Returns an Event given its id/identifier.
         Aborts with a 404 if event not found.
         """
@@ -396,7 +411,7 @@ class DataGetter(object):
             event = Event.query.get(event_id_or_identifier)
         else:
             event = Event.query.filter_by(identifier=event_id_or_identifier).first()
-        if event is None:
+        if event is None and should_abort:
             abort(404)
         return event
 
@@ -704,17 +719,22 @@ class DataGetter(object):
             .filter_by(in_trash=False)
 
     @staticmethod
-    @cache.cached(timeout=604800, key_prefix='pages')
-    def get_all_pages():
-        return Page.query.order_by(desc(Page.index)).all()
+    def get_all_pages(selected_lang=None):
+        if not selected_lang:
+            return Page.query.order_by(desc(Page.index)).all()
+        else:
+            return Page.query.filter_by(language=selected_lang).order_by(desc(Page.index)).all()
 
     @staticmethod
     def get_page_by_id(page_id):
         return Page.query.get(page_id)
 
     @staticmethod
-    def get_page_by_url(url):
-        results = Page.query.filter(Page.url.contains(url))
+    def get_page_by_url(url, selected_language=False):
+        if selected_language:
+            results = Page.query.filter_by(language=selected_language).filter(Page.url.contains(url))
+        else:
+            results = Page.query.filter(Page.url.contains(url))
         if results:
             return results.first()
         return results

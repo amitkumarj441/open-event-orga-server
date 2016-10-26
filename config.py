@@ -1,8 +1,14 @@
+# -*- coding: utf-8 -*-
 """Written by - Rafal Kowalski"""
 import os
 
 _basedir = os.path.abspath(os.path.dirname(__file__))
 
+# available languages
+LANGUAGES = {
+    'en': 'English',
+    'de': 'German'
+}
 
 class Config(object):
     DEBUG = False
@@ -24,7 +30,7 @@ class ProductionConfig(Config):
     INTEGRATE_SOCKETIO = True
 
     # Test database performance
-    SQLALCHEMY_RECORD_QUERIES = True
+    SQLALCHEMY_RECORD_QUERIES = False
     DATABASE_QUERY_TIMEOUT = 0.1
 
     # if force off

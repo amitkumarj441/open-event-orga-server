@@ -663,12 +663,14 @@ class DataManager(object):
         update_version(session.event_id, False, "sessions_ver")
 
     @staticmethod
-    def session_accept_reject(session, event_id, state):
+    def session_accept_reject(session, event_id, state, send_email = True):
         session.state = state
         session.submission_date = datetime.now()
         session.submission_modifier = login.current_user.email
+        session.state_email_sent = False
         save_to_db(session, 'Session State Updated')
-        trigger_session_state_change_notifications(session, event_id)
+        if send_email:
+            trigger_session_state_change_notifications(session, event_id)
         flash("The session has been %s" % state)
 
     @staticmethod
@@ -1411,6 +1413,9 @@ class DataManager(object):
                 ticket_max_orders = form.getlist('tickets[max_order]')
                 ticket_tags = form.getlist('tickets[tags]')
 
+                discount_code_id = form.get('discount_code_id', None)
+                event.discount_code_id = discount_code_id if discount_code_id and discount_code_id != '' else None
+
                 for i, name in enumerate(ticket_names):
                     if name.strip():
                         ticket_prices[i] = ticket_prices[i] if ticket_prices[i] != '' else 0
@@ -1542,6 +1547,7 @@ class DataManager(object):
             session_form = ""
             speaker_form = ""
             for index, name in enumerate(custom_forms_name):
+
                 if name == "session_form":
                     session_form = custom_forms_value[index]
                 elif name == "speaker_form":
@@ -2192,7 +2198,8 @@ class DataManager(object):
     def create_page(form):
 
         page = Page(name=form.get('name', ''), title=form.get('title', ''), description=form.get('description', ''),
-                    url=form.get('url', ''), place=form.get('place', ''), index=form.get('index', 0))
+                    url=form.get('url', ''), place=form.get('place', ''), index=form.get('index', 0),
+                    language=form.get('language', 'en'))
         save_to_db(page, "Page created")
         cache.delete('pages')
 
@@ -2203,6 +2210,7 @@ class DataManager(object):
         page.url = form.get('url', '')
         page.place = form.get('place', '')
         page.index = form.get('index', '')
+        page.language = form.get('language', 'en')
         save_to_db(page, "Page updated")
         cache.delete('pages')
 
